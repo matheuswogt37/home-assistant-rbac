@@ -12,6 +12,7 @@ import voluptuous as vol
 from homeassistant.auth.models import User
 from homeassistant.auth.permissions.const import POLICY_READ
 from homeassistant.auth.permissions.events import SUBSCRIBE_ALLOWLIST
+from homeassistant.auth.permissions import async_authorize
 from homeassistant.const import (
     CONF_EXTERNAL_URL,
     EVENT_STATE_CHANGED,
@@ -280,6 +281,23 @@ async def handle_call_service(
     """Handle call service command."""
     try:
         context = connection.context(msg)
+
+        # Aqui esta sendo implementado o controle de acesso RBAC
+        authorized = await async_authorize(
+            hass,
+            connection,
+            msg,
+        )
+        if not authorized:
+            connection.send_error(
+                msg["id"],
+                const.ERR_UNAUTHORIZED,
+                "Acesso negado pelo RBAC.",
+            )
+            return
+        context = connection.context(msg)
+
+
         response = await hass.services.async_call(
             domain=msg["domain"],
             service=msg["service"],
