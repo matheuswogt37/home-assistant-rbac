@@ -1,20 +1,26 @@
-from collections.abc import Sequence
+"""RBAC authorization chain execution module."""
 
 from .context import RBACContext
-from .parserRbac import RBACPolicyParser
+from .handlers.handler import RBACHandler
+from .handlers.network import RBACHandlerNetwork
 
 # RBAC handlers
 from .handlers.permission import RBACHandlerPermission
 from .handlers.time import RBACHandlerTime
+from .parserRbac import RBACPolicyParser
+
 
 class RBACChain:
     """Chain of Responsibility for RBAC authorization."""
+
+    _handlers: list[RBACHandler] = []
 
     def __init__(self, policy: RBACPolicyParser) -> None:
         """Initialize the RBAC chain."""
         self._handlers = [
             RBACHandlerPermission(policy),
-            RBACHandlerTime(policy)
+            RBACHandlerTime(policy),
+            RBACHandlerNetwork(policy),
         ]
 
     async def handle(self, context: RBACContext) -> bool:

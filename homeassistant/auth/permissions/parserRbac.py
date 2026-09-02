@@ -1,7 +1,9 @@
+"""Parser for json that RBAC access control consume."""
+
 import json
 import os
-import tempfile
 from pathlib import Path
+import tempfile
 from typing import Any
 
 DEFAULT_POLICY: dict[str, Any] = {
@@ -9,10 +11,12 @@ DEFAULT_POLICY: dict[str, Any] = {
     "roles": {},
 }
 
+
 class RBACPolicyParser:
     """Parse and store the RBAC policy."""
 
     def __init__(self, path: Path) -> None:
+        """Initialize RBAC Json Parser."""
         self._path = path
         self._data: dict[str, Any] = {}
 
@@ -43,8 +47,8 @@ class RBACPolicyParser:
             os.unlink(temp_path)
             raise
 
-    def async_reset(self):
-        """Reset RBAC policy to default policy"""
+    def reset(self) -> None:
+        """Reset RBAC policy to default policy."""
 
         self._data = DEFAULT_POLICY.copy()
         self._write_policy()
@@ -53,7 +57,7 @@ class RBACPolicyParser:
         """Load the RBAC policy from disk."""
 
         if not self._path.exists():
-            self.async_reset()
+            self.reset()
 
         with self._path.open("r", encoding="utf-8") as file:
             self._data = json.load(file)
@@ -63,15 +67,16 @@ class RBACPolicyParser:
     # Create
 
     # Read
-    def _get_user_attributes(self, user_id: str, attribute: str) -> Any:
+    def get_user_attributes(self, user_id: str, attribute: str) -> Any:
         """Get one specific attribute from all user roles."""
 
         user = self._data.get("users", {}).get(user_id)
 
         if user is None:
-            raise KeyError(f"User had no roles") #! On this line is wrong to add user_id to identify the user? For logging purpose
+            raise KeyError(
+                "User had no roles"
+            )  #! On this line is wrong to add user_id to identify the user? For logging purpose
             # Return false because this will be the default return for some error, the requester needs to take care of this
-            return False
 
         # All permissions for this user and attribute
         values = []
@@ -90,8 +95,7 @@ class RBACPolicyParser:
         # if there is no attribute on user roles
         if not values:
             raise KeyError(f"Attribute {attribute!r} not found on user roles")
-            return False
-        
+
         # Strategy 1: If this attribute contains only boolean then return True if ANY role grants it (Logical OR)
         if all(isinstance(v, bool) for v in values):
             return any(values)
@@ -104,7 +108,7 @@ class RBACPolicyParser:
                     if item not in unique_items:
                         unique_items.append(item)
             return unique_items
-            
+
         # Strategy 3: If this attribute contains only dictionaries/objects (deduplicate dicts)
         if all(isinstance(v, dict) for v in values):
             unique_dicts = []
@@ -115,7 +119,6 @@ class RBACPolicyParser:
 
         # Default strategy: return what this attribute had, the requester needs to take care of this
         return values
-
 
     # Update
 

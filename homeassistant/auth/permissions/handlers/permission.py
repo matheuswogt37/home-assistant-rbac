@@ -1,10 +1,18 @@
+"""Device Permission handler for RBAC authorization."""
+
+import logging
+
 from ..context import RBACContext
 from ..parserRbac import RBACPolicyParser
 
-class RBACHandlerPermission():
+_LOGGER = logging.getLogger(__name__)
+
+
+class RBACHandlerPermission:
     """Handler for device permissions."""
-    
+
     def __init__(self, policy: RBACPolicyParser) -> None:
+        """Initialize device permission handler."""
         self._policy = policy
 
     async def handle(self, context: RBACContext) -> bool:
@@ -15,12 +23,12 @@ class RBACHandlerPermission():
             return False
 
         try:
-            devices = self._policy._get_user_attributes(context.user.id, "attr_devices")
+            devices = self._policy.get_user_attributes(context.user.id, "attr_devices")
         except KeyError as error:
-            print(error)
+            _LOGGER.error(error)
             return False
 
-        # If this device_id is on autorized devices then permit, else deny
+        # If this device_id is on authorized devices then permit, else deny
         if device_id in devices:
             return True
 

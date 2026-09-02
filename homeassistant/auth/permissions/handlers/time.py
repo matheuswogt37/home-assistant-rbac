@@ -1,13 +1,21 @@
+"""Time handler for RBAC authorization."""
+
 from datetime import datetime
+import logging
+
 from homeassistant.util import dt as dt_util
 
 from ..context import RBACContext
 from ..parserRbac import RBACPolicyParser
 
-class RBACHandlerTime():
+_LOGGER = logging.getLogger(__name__)
+
+
+class RBACHandlerTime:
     """Handler for request time."""
-    
+
     def __init__(self, policy: RBACPolicyParser) -> None:
+        """Initialize time handler."""
         self._policy = policy
 
     async def handle(self, context: RBACContext) -> bool:
@@ -16,9 +24,9 @@ class RBACHandlerTime():
         actual_time = dt_util.now().time()
 
         try:
-            limit_times = self._policy._get_user_attributes(context.user.id, "time")
+            limit_times = self._policy.get_user_attributes(context.user.id, "time")
         except KeyError as error:
-            print(error)
+            _LOGGER.error(error)
             return False
 
         # Run through all limit_times

@@ -1,13 +1,13 @@
+"""Request Context to RBAC chain and handlers consume."""
+
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import HomeAssistant
 
-from typing import TYPE_CHECKING
-
 if TYPE_CHECKING:
     from homeassistant.auth.models import User
-    from homeassistant.components.websocket_api.connection import ActiveConnection
+    from homeassistant.components.websocket_api import ActiveConnection
 
 
 @dataclass(slots=True)
@@ -16,5 +16,5 @@ class RBACContext:
 
     hass: HomeAssistant
     connection: ActiveConnection
-    user: User | None
+    user: User
     message: dict[str, Any]
