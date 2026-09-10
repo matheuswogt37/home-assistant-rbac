@@ -25,9 +25,9 @@ from . import auth_store, jwt_wrapper, models
 from .const import ACCESS_TOKEN_EXPIRATION, GROUP_ID_ADMIN, REFRESH_TOKEN_EXPIRATION
 from .mfa_modules import MultiFactorAuthModule, auth_mfa_module_from_config
 from .models import AuthFlowContext, AuthFlowResult
+from .permissions import async_setup as async_setup_rbac
 from .providers import AuthProvider, LoginFlow, auth_provider_from_config
 from .providers.homeassistant import HassAuthProvider
-from .permissions import async_setup as async_setup_rbac
 
 EVENT_USER_ADDED = "user_added"
 EVENT_USER_UPDATED = "user_updated"
@@ -95,7 +95,7 @@ async def auth_manager_from_config(
 
     manager = AuthManager(hass, store, provider_hash, module_hash)
     await manager.async_setup()
-    
+
     # RBAC init
     await async_setup_rbac(hass)
     return manager

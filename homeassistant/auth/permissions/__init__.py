@@ -1,26 +1,27 @@
 """Permissions for Home Assistant."""
 
 from collections.abc import Callable, Iterable
-from typing import TYPE_CHECKING, override, Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, override
 
 import voluptuous as vol
-from pathlib import Path
+
 from homeassistant.core import HomeAssistant
 
-
+from .chain import RBACChain
 from .const import CAT_ENTITIES
+from .context import RBACContext
 from .entities import ENTITY_POLICY_SCHEMA, compile_entities
 from .merge import merge_policies
 from .models import PermissionLookup
+from .parserRbac import RBACPolicyParser
 from .types import PolicyType
 from .util import test_all
-from .chain import RBACChain
-from .context import RBACContext
-from .parserRbac import RBACPolicyParser
 
 if TYPE_CHECKING:
+    from homeassistant.components.websocket_api import ActiveConnection
+
     from ..models import User
-    from homeassistant.components.websocket_api.connection import ActiveConnection
 
 POLICY_SCHEMA = vol.Schema({vol.Optional(CAT_ENTITIES): ENTITY_POLICY_SCHEMA})
 
@@ -36,6 +37,7 @@ __all__ = [
 ]
 
 ACCESS_CONTROL_DOMAIN = "rbac"
+
 
 def filter_entity_ids_by_permission(
     user: User, entity_ids: Iterable[str], key: str
@@ -108,24 +110,23 @@ class _OwnerPermissions(AbstractPermissions):
 
 OwnerPermissions = _OwnerPermissions()
 
+
 # RBAC
 async def async_setup(hass: HomeAssistant) -> None:
     """Set up the RBAC subsystem."""
-
-    policy = RBACPolicyParser(
-        Path(hass.config.path("rbac.json"))
-    )
+    # this parser initialize with config/rbac.json. If needs to change file path change this here
+    policy = RBACPolicyParser(Path(hass.config.path("rbac.json")))
 
     policy.load()
 
     chain = RBACChain(policy=policy)
 
-    hass.data[ACCESS_CONTROL_DOMAIN] = {
-        "policy": policy,
-        "chain": chain
-    }
+    hass.data[ACCESS_CONTROL_DOMAIN] = {"policy": policy, "chain": chain}
 
-async def async_authorize(hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]) -> bool:
+
+async def async_authorize(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> bool:
     """Authorize a WebSocket service call."""
     context = RBACContext(
         hass=hass,
@@ -134,6 +135,6 @@ async def async_authorize(hass: HomeAssistant, connection: ActiveConnection, msg
         message=msg,
     )
 
-    chain = hass.data[ACCESS_CONTROL_DOMAIN]["chain"]
+    chain: RBACChain = hass.data[ACCESS_CONTROL_DOMAIN]["chain"]
 
     return await chain.handle(context)

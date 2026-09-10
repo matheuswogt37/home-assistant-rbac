@@ -65,6 +65,20 @@ class RBACPolicyParser:
     # CRUD
 
     # Create
+    def create_role(self, role: str) -> None:
+        """Create a new RBAC role."""
+
+        if not role:
+            raise ValueError("Role name cannot be empty")
+
+        roles = self._data.setdefault("roles", {})
+
+        if role in roles:
+            raise ValueError(f"Role {role!r} already exists")
+
+        roles[role] = {}
+
+        self._write_policy()
 
     # Read
     def get_user_attributes(self, user_id: str, attribute: str) -> Any:
@@ -120,6 +134,77 @@ class RBACPolicyParser:
         # Default strategy: return what this attribute had, the requester needs to take care of this
         return values
 
+    def get_users(self) -> list[dict[str, Any]]:
+        """Get all users and their assigned roles."""
+        users = self._data.get("users", {})
+
+        # Return this array using the format that is inside it
+        return [
+            {
+                "user_id": user_id,
+                "roles": user_data.get("roles", []),
+            }
+            for user_id, user_data in users.items()
+        ]
+
+    def get_roles(self) -> list[dict[str, Any]]:
+        """Get all available roles."""
+        return list(self._data.get("roles", {}).keys())
+
     # Update
+    def update_users(self, users: list[dict[str, Any]]) -> None:
+        """Update users and their assigned roles."""
+
+        available_roles = self._data.get("roles", {})
+
+        updated_users: dict[str, dict[str, Any]] = {}
+
+        for user in users:
+            user_id = user.get("user_id")
+            roles = user.get("roles", [])
+
+            if not isinstance(user_id, str):
+                raise TypeError("User ID must be a string")
+
+            if not isinstance(roles, list):
+                raise TypeError("User roles must be a list")
+
+            if not all(isinstance(role, str) for role in roles):
+                raise TypeError("User roles must contain only strings")
+
+            invalid_roles = [role for role in roles if role not in available_roles]
+
+            if invalid_roles:
+                raise ValueError(f"Unknown roles: {', '.join(invalid_roles)}")
+
+            updated_users[user_id] = {
+                "roles": roles,
+            }
+
+        self._data["users"] = updated_users
+
+        self._write_policy()
 
     # Delete
+    def delete_role(self, role: str) -> None:
+        """Delete an RBAC role."""
+
+        roles = self._data.setdefault("roles", {})
+
+        if role not in roles:
+            raise ValueError(f"Role {role!r} not found")
+
+        users = self._data.get("users", {})
+
+        users_with_role = [
+            user_id
+            for user_id, user_data in users.items()
+            if role in user_data.get("roles", [])
+        ]
+
+        if users_with_role:
+            raise ValueError(f"Role {role!r} is assigned to users")
+
+        del roles[role]
+
+        self._write_policy()

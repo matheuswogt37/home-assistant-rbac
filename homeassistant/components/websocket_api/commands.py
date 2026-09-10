@@ -10,9 +10,9 @@ from typing import Any, cast
 import voluptuous as vol
 
 from homeassistant.auth.models import User
+from homeassistant.auth.permissions import ACCESS_CONTROL_DOMAIN, async_authorize
 from homeassistant.auth.permissions.const import POLICY_READ
 from homeassistant.auth.permissions.events import SUBSCRIBE_ALLOWLIST
-from homeassistant.auth.permissions import async_authorize
 from homeassistant.const import (
     CONF_EXTERNAL_URL,
     EVENT_STATE_CHANGED,
@@ -142,6 +142,11 @@ def async_register_commands(
     async_reg(hass, handle_supported_features)
     async_reg(hass, handle_integration_descriptions)
     async_reg(hass, handle_integration_wait)
+    async_reg(hass, handle_rbac_list_users)
+    async_reg(hass, handle_rbac_list_roles)
+    async_reg(hass, handle_rbac_save_users)
+    async_reg(hass, handle_rbac_create_role)
+    async_reg(hass, handle_rbac_delete_role)
 
 
 def pong_message(iden: int) -> dict[str, Any]:
@@ -282,7 +287,7 @@ async def handle_call_service(
     try:
         context = connection.context(msg)
 
-        # Aqui esta sendo implementado o controle de acesso RBAC
+        # Here is the RBAC Access Control implementation
         authorized = await async_authorize(
             hass,
             connection,
@@ -292,11 +297,10 @@ async def handle_call_service(
             connection.send_error(
                 msg["id"],
                 const.ERR_UNAUTHORIZED,
-                "Acesso negado pelo RBAC.",
+                "Access Denied.",
             )
             return
         context = connection.context(msg)
-
 
         response = await hass.services.async_call(
             domain=msg["domain"],
@@ -1356,3 +1360,140 @@ async def handle_integration_wait(
     connection.send_result(
         msg["id"], {"integration_loaded": await async_wait_component(hass, domain)}
     )
+
+
+@decorators.websocket_command(
+    {
+        vol.Required("type"): "rbac/list_users",
+    }
+)
+@decorators.require_admin
+@decorators.async_response
+async def handle_rbac_list_users(
+    hass: HomeAssistant,
+    connection: ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Handle RBAC list users command."""
+    policy = hass.data[ACCESS_CONTROL_DOMAIN]["policy"]
+
+    rbac_users = {user["user_id"]: user["roles"] for user in policy.get_users()}
+
+    users = []
+
+    users = [
+        {
+            "user_id": user.id,
+            "name": user.name,
+            "roles": rbac_users.get(user.id, []),
+        }
+        for user in await hass.auth.async_get_users()
+    ]
+
+    connection.send_result(msg["id"], {"users": users})
+
+
+@callback
+@decorators.websocket_command(
+    {
+        vol.Required("type"): "rbac/list_roles",
+    }
+)
+@decorators.require_admin
+def handle_rbac_list_roles(
+    hass: HomeAssistant,
+    connection: ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Handle RBAC list roles command."""
+    policy = hass.data[ACCESS_CONTROL_DOMAIN]["policy"]
+
+    roles = policy.get_roles()
+
+    connection.send_result(msg["id"], {"roles": roles})
+
+
+@decorators.websocket_command(
+    {
+        vol.Required("type"): "rbac/save_users",
+        vol.Required("users"): list,
+    }
+)
+@decorators.require_admin
+@decorators.async_response
+async def handle_rbac_save_users(
+    hass: HomeAssistant,
+    connection: ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Handle RBAC save users command."""
+    policy = hass.data[ACCESS_CONTROL_DOMAIN]["policy"]
+
+    users = msg["users"]
+
+    existing_users = {user.id for user in await hass.auth.async_get_users()}
+
+    for user in users:
+        if user.get("user_id") not in existing_users:
+            connection.send_error(msg["id"], const.ERR_NOT_FOUND, "User not found")
+            return
+    try:
+        policy.update_users(users)
+    except TypeError as error:
+        connection.send_error(msg["id"], const.ERR_INVALID_FORMAT, str(error))
+    except ValueError as error:
+        connection.send_error(msg["id"], const.ERR_INVALID_FORMAT, str(error))
+
+    connection.send_result(msg["id"], {"success": True})
+
+
+@decorators.require_admin
+@decorators.websocket_command(
+    {
+        vol.Required("type"): "rbac/create_role",
+        vol.Required("role"): str,
+    }
+)
+@decorators.async_response
+async def handle_rbac_create_role(
+    hass: HomeAssistant,
+    connection: ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Handle RBAC role creation."""
+
+    policy = hass.data[ACCESS_CONTROL_DOMAIN]["policy"]
+
+    try:
+        policy.create_role(msg["role"])
+    except ValueError as err:
+        connection.send_error(msg["id"], const.ERR_INVALID_FORMAT, str(err))
+        return
+
+    connection.send_result(msg["id"], {"success": True})
+
+
+@decorators.require_admin
+@decorators.websocket_command(
+    {
+        vol.Required("type"): "rbac/delete_role",
+        vol.Required("role"): str,
+    }
+)
+@decorators.async_response
+async def handle_rbac_delete_role(
+    hass: HomeAssistant,
+    connection: ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Handle RBAC role deletion."""
+
+    policy = hass.data[ACCESS_CONTROL_DOMAIN]["policy"]
+
+    try:
+        policy.delete_role(msg["role"])
+    except ValueError as err:
+        connection.send_error(msg["id"], const.ERR_INVALID_FORMAT, str(err))
+        return
+
+    connection.send_result(msg["id"], {"success": True})
