@@ -112,7 +112,7 @@ OwnerPermissions = _OwnerPermissions()
 
 
 # RBAC
-async def async_setup(hass: HomeAssistant) -> None:
+async def async_setup_rbac(hass: HomeAssistant) -> None:
     """Set up the RBAC subsystem."""
     # this parser initialize with config/rbac.json. If needs to change file path change this here
     policy = RBACPolicyParser(Path(hass.config.path("rbac.json")))

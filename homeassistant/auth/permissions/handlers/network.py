@@ -2,8 +2,10 @@
 
 import ipaddress
 import logging
+from typing import Any
 
 from ..context import RBACContext
+from ..definition import RBACHandlerFrontRequestDefinition
 from ..parserRbac import RBACPolicyParser
 
 _LOGGER = logging.getLogger(__name__)
@@ -46,3 +48,20 @@ class RBACHandlerNetwork:
             return True
 
         return False
+
+    permission_definition = RBACHandlerFrontRequestDefinition(
+        id="network",
+        label="Rede local",
+        type="boolean",
+        attribute="only_local_network",
+    )
+
+    def validate_value(self, value: Any) -> None:
+        """Validate value if is bool."""
+        if not isinstance(value, bool):
+            raise TypeError("Network permission must be a boolean")
+
+    def update_role(self, role: dict[str, Any], value: object) -> None:
+        """Update this role network attribute."""
+        self.validate_value(value)
+        role[self.permission_definition.attribute] = value

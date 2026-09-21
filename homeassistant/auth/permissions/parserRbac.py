@@ -151,6 +151,21 @@ class RBACPolicyParser:
         """Get all available roles."""
         return list(self._data.get("roles", {}).keys())
 
+    def get_role(self, role: str) -> dict[str, Any]:
+        """Get an RBAC role."""
+        roles = self._data.get("roles", {})
+
+        if role not in roles:
+            raise KeyError(f"Role {role!r} not found")
+
+        try:
+            # Create a new dict from original value (roles[role])
+            return dict(roles[role])
+        except (TypeError, ValueError) as error:
+            raise TypeError(
+                f"Role {role!r} data cannot be converted to a dictionary"
+            ) from error
+
     # Update
     def update_users(self, users: list[dict[str, Any]]) -> None:
         """Update users and their assigned roles."""
@@ -182,6 +197,18 @@ class RBACPolicyParser:
             }
 
         self._data["users"] = updated_users
+
+        self._write_policy()
+
+    def update_role(self, role: str, role_data: dict[str, Any]) -> None:
+        """Update an RBAC role."""
+
+        roles = self._data.get("roles", {})
+
+        if role not in roles:
+            raise KeyError(f"Role {role!r} not found")
+
+        roles[role] = role_data.copy()
 
         self._write_policy()
 

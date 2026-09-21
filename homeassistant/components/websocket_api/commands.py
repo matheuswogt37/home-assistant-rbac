@@ -147,6 +147,9 @@ def async_register_commands(
     async_reg(hass, handle_rbac_save_users)
     async_reg(hass, handle_rbac_create_role)
     async_reg(hass, handle_rbac_delete_role)
+    async_reg(hass, handle_rbac_get_handlers_requests_definitions)
+    async_reg(hass, handle_rbac_get_role)
+    async_reg(hass, handle_rbac_update_role)
 
 
 def pong_message(iden: int) -> dict[str, Any]:
@@ -1370,9 +1373,7 @@ async def handle_integration_wait(
 @decorators.require_admin
 @decorators.async_response
 async def handle_rbac_list_users(
-    hass: HomeAssistant,
-    connection: ActiveConnection,
-    msg: dict[str, Any],
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
 ) -> None:
     """Handle RBAC list users command."""
     policy = hass.data[ACCESS_CONTROL_DOMAIN]["policy"]
@@ -1401,9 +1402,7 @@ async def handle_rbac_list_users(
 )
 @decorators.require_admin
 def handle_rbac_list_roles(
-    hass: HomeAssistant,
-    connection: ActiveConnection,
-    msg: dict[str, Any],
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
 ) -> None:
     """Handle RBAC list roles command."""
     policy = hass.data[ACCESS_CONTROL_DOMAIN]["policy"]
@@ -1422,9 +1421,7 @@ def handle_rbac_list_roles(
 @decorators.require_admin
 @decorators.async_response
 async def handle_rbac_save_users(
-    hass: HomeAssistant,
-    connection: ActiveConnection,
-    msg: dict[str, Any],
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
 ) -> None:
     """Handle RBAC save users command."""
     policy = hass.data[ACCESS_CONTROL_DOMAIN]["policy"]
@@ -1456,9 +1453,7 @@ async def handle_rbac_save_users(
 )
 @decorators.async_response
 async def handle_rbac_create_role(
-    hass: HomeAssistant,
-    connection: ActiveConnection,
-    msg: dict[str, Any],
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
 ) -> None:
     """Handle RBAC role creation."""
 
@@ -1482,9 +1477,7 @@ async def handle_rbac_create_role(
 )
 @decorators.async_response
 async def handle_rbac_delete_role(
-    hass: HomeAssistant,
-    connection: ActiveConnection,
-    msg: dict[str, Any],
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
 ) -> None:
     """Handle RBAC role deletion."""
 
@@ -1492,6 +1485,88 @@ async def handle_rbac_delete_role(
 
     try:
         policy.delete_role(msg["role"])
+    except ValueError as err:
+        connection.send_error(msg["id"], const.ERR_INVALID_FORMAT, str(err))
+        return
+
+    connection.send_result(msg["id"], {"success": True})
+
+
+@decorators.require_admin
+@decorators.websocket_command(
+    {
+        vol.Required("type"): "rbac/get_permission_definitions",
+    }
+)
+@decorators.async_response
+async def handle_rbac_get_handlers_requests_definitions(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Handle RBAC handlers requests definitions request."""
+
+    chain = hass.data[ACCESS_CONTROL_DOMAIN]["chain"]
+
+    permissions = [
+        {
+            "id": definition.id,
+            "label": definition.label,
+            "type": definition.type,
+        }
+        for definition in chain.get_permission_definitions()
+    ]
+
+    connection.send_result(msg["id"], {"permissions": permissions})
+
+
+@decorators.require_admin
+@decorators.websocket_command(
+    {
+        vol.Required("type"): "rbac/get_role",
+        vol.Required("role"): str,
+    }
+)
+@decorators.async_response
+async def handle_rbac_get_role(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Handle RBAC role request."""
+
+    chain = hass.data[ACCESS_CONTROL_DOMAIN]["chain"]
+
+    try:
+        permissions = chain.get_role_permissions(msg["role"])
+    except KeyError as err:
+        connection.send_error(
+            msg["id"],
+            const.ERR_NOT_FOUND,
+            str(err),
+        )
+        return
+
+    connection.send_result(msg["id"], {"role": msg["role"], "permissions": permissions})
+
+
+@decorators.require_admin
+@decorators.websocket_command(
+    {
+        vol.Required("type"): "rbac/update_role",
+        vol.Required("role"): str,
+        vol.Required("permissions"): dict,
+    }
+)
+@decorators.async_response
+async def handle_rbac_update_role(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Handle RBAC role update."""
+
+    chain = hass.data[ACCESS_CONTROL_DOMAIN]["chain"]
+
+    try:
+        chain.update_role_permissions(msg["role"], msg["permissions"])
+    except KeyError as err:
+        connection.send_error(msg["id"], const.ERR_NOT_FOUND, str(err))
+        return
     except ValueError as err:
         connection.send_error(msg["id"], const.ERR_INVALID_FORMAT, str(err))
         return
