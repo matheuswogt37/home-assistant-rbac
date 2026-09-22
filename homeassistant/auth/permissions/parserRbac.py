@@ -18,7 +18,34 @@ class RBACPolicyParser:
     def __init__(self, path: Path) -> None:
         """Initialize RBAC Json Parser."""
         self._path = path
+        self._bkp_path = path.with_name(path.name + ".bkp")
         self._data: dict[str, Any] = {}
+
+    def _write_backup_policy(self) -> None:
+        """Write the backup of current policy atomically."""
+        self._bkp_path.parent.mkdir(parents=True, exist_ok=True)
+
+        fd, temp_path = tempfile.mkstemp(
+            dir=self._bkp_path.parent,
+            prefix=".rbac-",
+            suffix=".tmp",
+        )
+
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as file:
+                json.dump(
+                    self._data,
+                    file,
+                    indent=2,
+                    ensure_ascii=False,
+                )
+                file.write("\n")
+
+            os.replace(temp_path, self._bkp_path)
+
+        except:
+            os.unlink(temp_path)
+            raise
 
     def _write_policy(self) -> None:
         """Write the current policy atomically."""
@@ -57,10 +84,14 @@ class RBACPolicyParser:
         """Load the RBAC policy from disk."""
 
         if not self._path.exists():
-            self.reset()
-
-        with self._path.open("r", encoding="utf-8") as file:
-            self._data = json.load(file)
+            if not self._bkp_path.exists():
+                self.reset()
+            else:
+                with self._bkp_path.open("r", encoding="utf-8") as file:
+                    self._data = json.load(file)
+        else:
+            with self._path.open("r", encoding="utf-8") as file:
+                self._data = json.load(file)
 
     # CRUD
 
@@ -75,6 +106,8 @@ class RBACPolicyParser:
 
         if role in roles:
             raise ValueError(f"Role {role!r} already exists")
+
+        self._write_backup_policy()
 
         roles[role] = {}
 
@@ -196,6 +229,8 @@ class RBACPolicyParser:
                 "roles": roles,
             }
 
+        self._write_backup_policy()
+
         self._data["users"] = updated_users
 
         self._write_policy()
@@ -207,6 +242,8 @@ class RBACPolicyParser:
 
         if role not in roles:
             raise KeyError(f"Role {role!r} not found")
+
+        self._write_backup_policy()
 
         roles[role] = role_data.copy()
 
@@ -231,6 +268,8 @@ class RBACPolicyParser:
 
         if users_with_role:
             raise ValueError(f"Role {role!r} is assigned to users")
+
+        self._write_backup_policy()
 
         del roles[role]
 
