@@ -1,6 +1,7 @@
 """RBAC authorization chain execution module."""
 
 from copy import deepcopy
+import logging
 from typing import Any
 
 from .context import RBACContext
@@ -14,6 +15,8 @@ from .handlers.network import RBACHandlerNetwork
 from .handlers.permission import RBACHandlerPermission
 from .handlers.time import RBACHandlerTime
 from .parserRbac import RBACPolicyParser
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class RBACChain:
@@ -31,20 +34,14 @@ class RBACChain:
         ]
         self._policy = policy
 
-    async def handle(self, context: RBACContext) -> bool:
+    def handle(self, context: RBACContext) -> bool:
         """Run all authorization handlers."""
 
         # If this user had administration access then permit all actions
         if context.user.is_admin:
             return True
 
-        for handler in self._handlers:
-            # If this handler DENY this action then return False
-            if not await handler.handle(context):
-                return False
-
-        #! Think about it
-        return True
+        return all(handler.handle(context) for handler in self._handlers)
 
     def get_permission_definitions(self) -> list[RBACHandlerFrontRequestDefinition]:
         """Return the definitions of all RBAC permissions."""
@@ -79,6 +76,14 @@ class RBACChain:
             if handler is None:
                 raise ValueError(f"Unknown permission: {permission_id!r}")
 
-            handler.update_role(updated_role, value)
+            try:
+                handler.update_role(updated_role, value)
+            except Exception as error:
+                _LOGGER.error("Error when updating role: %s", error)
+                raise
 
-        self._policy.update_role(role, updated_role)
+        try:
+            self._policy.update_role(role, updated_role)
+        except Exception as error:
+            _LOGGER.error("Error when updating role: %s", error)
+            raise

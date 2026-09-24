@@ -10,7 +10,11 @@ from typing import Any, cast
 import voluptuous as vol
 
 from homeassistant.auth.models import User
-from homeassistant.auth.permissions import ACCESS_CONTROL_DOMAIN, async_authorize
+from homeassistant.auth.permissions import (
+    ACCESS_CONTROL_DOMAIN,
+    async_authorize,
+    sync_authorize,
+)
 from homeassistant.auth.permissions.const import POLICY_READ
 from homeassistant.auth.permissions.events import SUBSCRIBE_ALLOWLIST
 from homeassistant.const import (
@@ -375,18 +379,39 @@ async def handle_call_service(
         connection.send_error(msg["id"], const.ERR_UNKNOWN_ERROR, str(err))
 
 
+def _async_get_denied_rbac_access_control(
+    hass: HomeAssistant, connection: ActiveConnection, entities: list[str]
+) -> list[str]:
+    denied_entities: list[str] = []
+
+    for entity_id in entities:
+        # create msg
+        message = {
+            "type": "subscribe_entities",
+            "service_data": {"entity_id": entity_id},
+        }
+        allowed = sync_authorize(hass, connection, message)
+        if not allowed:
+            denied_entities.append(entity_id)
+
+    return denied_entities
+
+
 @callback
 def _async_get_allowed_states(
     hass: HomeAssistant, connection: ActiveConnection
 ) -> list[State]:
     user = connection.user
-    if user.is_admin or user.permissions.access_all_entities(POLICY_READ):
+    if user.is_admin:
         return hass.states.async_all()
-    entity_perm = connection.user.permissions.check_entity
+
+    denied_entities = _async_get_denied_rbac_access_control(
+        hass, connection, hass.states.async_entity_ids()
+    )
     return [
         state
         for state in hass.states.async_all()
-        if entity_perm(state.entity_id, POLICY_READ)
+        if state.entity_id not in denied_entities
     ]
 
 

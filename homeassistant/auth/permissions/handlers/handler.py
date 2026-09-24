@@ -12,7 +12,7 @@ class RBACHandler(Protocol):
 
     permission_definition: RBACHandlerFrontRequestDefinition = (
         RBACHandlerFrontRequestDefinition(
-            id="id for this handler, use the file name",
+            id="id for this handler",
             label="Device name",
             type="input type",
             attribute="attribute that will be saved and queried on json",
@@ -22,7 +22,7 @@ class RBACHandler(Protocol):
     def __init__(self, policy: RBACPolicyParser) -> None:
         """Init handle."""
 
-    async def handle(self, context: RBACContext) -> bool:
+    def handle(self, context: RBACContext) -> bool:
         """Handle an authorization request."""
 
     def validate_value(self, value: Any) -> None:

@@ -14,6 +14,13 @@ _LOGGER = logging.getLogger(__name__)
 class RBACHandlerNetwork:
     """Handler for request network."""
 
+    permission_definition = RBACHandlerFrontRequestDefinition(
+        id="network",
+        label="Rede local",
+        type="boolean",
+        attribute="only_local_network",
+    )
+
     def __init__(self, policy: RBACPolicyParser) -> None:
         """Initialize network handler."""
         self._policy = policy
@@ -30,12 +37,12 @@ class RBACHandlerNetwork:
         else:
             return ip.is_private or ip.is_loopback or ip.is_link_local
 
-    async def handle(self, context: RBACContext) -> bool:
+    def handle(self, context: RBACContext) -> bool:
         """Handle an authorization request."""
 
         try:
             network = self._policy.get_user_attributes(
-                context.user.id, "only_local_network"
+                context.user.id, self.permission_definition.attribute
             )
         except KeyError as error:
             _LOGGER.error(error)
@@ -49,13 +56,6 @@ class RBACHandlerNetwork:
 
         return False
 
-    permission_definition = RBACHandlerFrontRequestDefinition(
-        id="network",
-        label="Rede local",
-        type="boolean",
-        attribute="only_local_network",
-    )
-
     def validate_value(self, value: Any) -> None:
         """Validate value if is bool."""
         if not isinstance(value, bool):
@@ -64,4 +64,7 @@ class RBACHandlerNetwork:
     def update_role(self, role: dict[str, Any], value: object) -> None:
         """Update this role network attribute."""
         self.validate_value(value)
+        if not value:
+            role.pop(self.permission_definition.attribute)
+            return
         role[self.permission_definition.attribute] = value

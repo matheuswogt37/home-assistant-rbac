@@ -137,4 +137,20 @@ async def async_authorize(
 
     chain: RBACChain = hass.data[ACCESS_CONTROL_DOMAIN]["chain"]
 
-    return await chain.handle(context)
+    return chain.handle(context)
+
+
+def sync_authorize(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> bool:
+    """Authorize a WebSocket service call."""
+    context = RBACContext(
+        hass=hass,
+        connection=connection,
+        user=connection.user,
+        message=msg,
+    )
+
+    chain: RBACChain = hass.data[ACCESS_CONTROL_DOMAIN]["chain"]
+
+    return chain.handle(context)

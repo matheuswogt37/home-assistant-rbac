@@ -1,6 +1,6 @@
 """Time handler for RBAC authorization."""
 
-from datetime import datetime, time
+from datetime import datetime
 import logging
 from typing import Any
 
@@ -16,17 +16,26 @@ _LOGGER = logging.getLogger(__name__)
 class RBACHandlerTime:
     """Handler for request time."""
 
+    permission_definition = RBACHandlerFrontRequestDefinition(
+        id="time",
+        label="Horário",
+        type="time_range",
+        attribute="time",
+    )
+
     def __init__(self, policy: RBACPolicyParser) -> None:
         """Initialize time handler."""
         self._policy = policy
 
-    async def handle(self, context: RBACContext) -> bool:
+    def handle(self, context: RBACContext) -> bool:
         """Handle an authorization request."""
 
         actual_time = dt_util.now().time()
 
         try:
-            limit_times = self._policy.get_user_attributes(context.user.id, "time")
+            limit_times = self._policy.get_user_attributes(
+                context.user.id, self.permission_definition.attribute
+            )
         except KeyError as error:
             _LOGGER.error(error)
             return False
@@ -39,13 +48,6 @@ class RBACHandlerTime:
                 return True
 
         return False
-
-    permission_definition = RBACHandlerFrontRequestDefinition(
-        id="time",
-        label="Horário",
-        type="time_range",
-        attribute="time",
-    )
 
     def validate_value(self, value: Any) -> None:
         """Validate value if is dictionary of strings."""
@@ -61,13 +63,10 @@ class RBACHandlerTime:
         if not isinstance(end, str):
             raise TypeError("Time end must be a string")
 
-        try:
-            time.fromisoformat(start)
-            time.fromisoformat(end)
-        except ValueError as error:
-            raise ValueError("Invalid time format") from error
-
-    def update_role(self, role: dict[str, Any], value: object) -> None:
+    def update_role(self, role: dict[str, Any], value: Any) -> None:
         """Update this role time attribute."""
         self.validate_value(value)
+        if value.get("start") == "" or value.get("end") == "":
+            role.pop(self.permission_definition.attribute)
+            return
         role[self.permission_definition.attribute] = value
