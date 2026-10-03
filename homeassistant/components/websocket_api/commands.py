@@ -307,7 +307,6 @@ async def handle_call_service(
                 "Access Denied.",
             )
             return
-        context = connection.context(msg)
 
         response = await hass.services.async_call(
             domain=msg["domain"],
