@@ -10,6 +10,7 @@ DEFAULT_POLICY: dict[str, Any] = {
     "users": {},
     "roles": {},
 }
+ATTRIBUTE_NOT_FOUND = object()
 
 
 class RBACPolicyParser:
@@ -120,9 +121,7 @@ class RBACPolicyParser:
         user = self._data.get("users", {}).get(user_id)
 
         if user is None:
-            raise KeyError(
-                "User had no roles"
-            )  #! On this line is wrong to add user_id to identify the user? For logging purpose
+            raise KeyError("User had no roles")
             # Return false because this will be the default return for some error, the requester needs to take care of this
 
         # All permissions for this user and attribute
@@ -139,9 +138,9 @@ class RBACPolicyParser:
             if attribute in role_data:
                 values.append(role_data[attribute])
 
-        # if there is no attribute on user roles
+        # if there is no attribute on user roles then just return ATTRIBUTE_NOT_FOUND, this user had no rule against this attribute. The requester needs to handle this
         if not values:
-            raise KeyError(f"Attribute {attribute!r} not found on user roles")
+            return ATTRIBUTE_NOT_FOUND
 
         # Strategy 1: If this attribute contains only boolean then return True if ANY role grants it (Logical OR)
         if all(isinstance(v, bool) for v in values):

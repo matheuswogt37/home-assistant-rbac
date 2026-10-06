@@ -5,7 +5,7 @@ from typing import Any
 
 from ..context import RBACContext
 from ..definition import RBACHandlerFrontRequestDefinition
-from ..parserRbac import RBACPolicyParser
+from ..parserRbac import ATTRIBUTE_NOT_FOUND, RBACPolicyParser
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,6 +38,10 @@ class RBACHandlerPermission:
         except KeyError as error:
             _LOGGER.error(error)
             return False
+
+        # If this user had no attribute related then permit
+        if devices is ATTRIBUTE_NOT_FOUND:
+            return True
 
         # If this device_id is on authorized devices then permit, else deny
         if device_id in devices:

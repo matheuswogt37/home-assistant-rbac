@@ -8,7 +8,7 @@ from homeassistant.util import dt as dt_util
 
 from ..context import RBACContext
 from ..definition import RBACHandlerFrontRequestDefinition
-from ..parserRbac import RBACPolicyParser
+from ..parserRbac import ATTRIBUTE_NOT_FOUND, RBACPolicyParser
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,6 +39,10 @@ class RBACHandlerTime:
         except KeyError as error:
             _LOGGER.error(error)
             return False
+
+        # If this user had no attribute related then permit
+        if limit_times is ATTRIBUTE_NOT_FOUND:
+            return True
 
         # Run through all limit_times
         for limit_time in limit_times:

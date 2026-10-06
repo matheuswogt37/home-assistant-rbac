@@ -24,6 +24,13 @@ class RBACHandlerNetwork:
     def __init__(self, policy: RBACPolicyParser) -> None:
         """Initialize network handler."""
         self._policy = policy
+        default_subnets = ["192.168.1.0/24", "192.168.0.0/24", "10.0.0.0/24"]
+        self._allowed_networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+        for net in default_subnets:
+            try:
+                self._allowed_networks.append(ipaddress.ip_network(net, strict=False))
+            except ValueError as err:
+                _LOGGER.error(err)
 
     def is_on_local_network(self, ip_str: str | None) -> bool:
         """Checks if an IP address string belongs to a local/private network, including loopback and link-local addresses."""
@@ -34,8 +41,28 @@ class RBACHandlerNetwork:
         except ValueError:
             # Returns False if the string is not a valid IP address
             return False
-        else:
-            return ip.is_private or ip.is_loopback or ip.is_link_local
+
+        if ip.is_loopback:
+            return True
+
+        return any(ip in network for network in self._allowed_networks)
+
+    def _extract_ip_from_connection(self, context: RBACContext) -> str | None:
+        """Extracts client IP address safely from ActiveConnection context."""
+        conn = context.connection
+        if not conn:
+            return None
+
+        if hasattr(conn, "ip_address") and conn.ip_address:
+            return str(conn.ip_address)
+
+        if hasattr(conn, "remote"):
+            return str(conn.remote)
+
+        if hasattr(conn, "ws") and hasattr(conn.ws, "remote_address"):
+            return str(conn.ws.remote_address[0])
+
+        return None
 
     def handle(self, context: RBACContext) -> bool:
         """Handle an authorization request."""
@@ -46,14 +73,18 @@ class RBACHandlerNetwork:
             )
         except KeyError as error:
             _LOGGER.error(error)
+            return False
 
         if not network:
             return True
 
-        is_local = self.is_on_local_network(context.connection.remote)
+        client_ip = self._extract_ip_from_connection(context)
+        if not client_ip:
+            return False
+
+        is_local = self.is_on_local_network(client_ip)
         if is_local:
             return True
-
         return False
 
     def validate_value(self, value: Any) -> None:
@@ -65,6 +96,6 @@ class RBACHandlerNetwork:
         """Update this role network attribute."""
         self.validate_value(value)
         if not value:
-            role.pop(self.permission_definition.attribute)
+            role.pop(self.permission_definition.attribute, None)
             return
         role[self.permission_definition.attribute] = value
