@@ -6,7 +6,7 @@ from typing import Any
 
 from ..context import RBACContext
 from ..definition import RBACHandlerFrontRequestDefinition
-from ..parserRbac import RBACPolicyParser
+from ..parserRbac import ATTRIBUTE_NOT_FOUND, RBACPolicyParser
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -74,6 +74,10 @@ class RBACHandlerNetwork:
         except KeyError as error:
             _LOGGER.error(error)
             return False
+
+        # If this user had no attribute related then permit
+        if network is ATTRIBUTE_NOT_FOUND:
+            return True
 
         if not network:
             return True
